@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+*.egg-info/
+# generated workspace (versioned with DVC / Google Drive, not git)
+workspace/
+workspace_demo/
+/data/
+kaggle.json
+.env
+.ipynb_checkpoints/

@@ -1,0 +1,32 @@
+# Reproducible, cached pipeline:  dvc repro        (re-runs only the stages whose inputs/params changed)
+# Metrics comparison:             dvc metrics show / dvc metrics diff / dvc plots show
+# The same logic is available without DVC via `python -m olympics.cli run` (own checkpointing).
+stages:
+  ingest:
+    cmd: python -m olympics.cli run --root workspace --stages ingest
+    deps: [src/olympics/data/ingest.py]
+    params: [data.source, data.sources, data.local_dir]
+    outs: [workspace/data/interim]
+  clean:
+    cmd: python -m olympics.cli run --root workspace --stages clean sql
+    deps: [src/olympics/data, src/olympics/sql, workspace/data/interim]
+    params: [data, validation]
+    outs: [workspace/data/processed/clean_events.parquet, workspace/data/processed/medals.parquet, workspace/db]
+    metrics: [workspace/reports/metrics/data_quality.json]
+  analysis:
+    cmd: python -m olympics.cli run --root workspace --stages stats forecast
+    deps: [src/olympics/analysis, src/olympics/forecasting, workspace/data/processed/clean_events.parquet]
+    params: [stats, forecast]
+    outs: [workspace/reports/figures, workspace/reports/tables]
+    metrics: [workspace/reports/metrics/forecast_summary.json]
+  train:
+    cmd: python -m olympics.cli run --root workspace --stages features compare final
+    deps: [src/olympics/ml, workspace/data/processed/clean_events.parquet]
+    params: [ml]
+    outs: [workspace/models]
+    metrics: [workspace/reports/metrics/final_model_metrics.json]
+  monitor:
+    cmd: python -m olympics.cli run --root workspace --stages monitor report
+    deps: [src/olympics/monitoring, workspace/models]
+    params: [monitoring]
+    metrics: [workspace/reports/metrics/monitoring_summary.json]

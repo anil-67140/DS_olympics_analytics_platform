@@ -1,0 +1,8 @@
+workspace*/
+tests/
+notebooks/
+docs/
+.git/
+__pycache__/
+*.pyc
+kaggle.json

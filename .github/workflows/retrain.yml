@@ -1,0 +1,22 @@
+name: Scheduled monitoring and retraining
+
+on:
+  schedule: [{ cron: "0 3 * * 1" }]      # Mondays 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -r requirements.txt
+      # Requires the workspace (data + feedback) to be available, e.g. restored from object storage or `dvc pull`.
+      - name: Drift/performance monitoring, then champion-challenger retraining with human feedback
+        env: { KAGGLE_USERNAME: "${{ secrets.KAGGLE_USERNAME }}", KAGGLE_KEY: "${{ secrets.KAGGLE_KEY }}" }
+        run: |
+          python -m olympics.cli run --root workspace --stages monitor --force monitor
+          python -m olympics.cli retrain --root workspace
+      - uses: actions/upload-artifact@v4
+        with: { name: monitoring, path: "workspace/reports/metrics/*.json" }

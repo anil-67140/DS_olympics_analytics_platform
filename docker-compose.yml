@@ -1,0 +1,22 @@
+services:
+  api:
+    build: .
+    command: ["api"]
+    ports: ["8000:8000"]
+    environment: { OLYMPICS_ROOT: /app/workspace }
+    volumes: ["./workspace:/app/workspace"]
+    restart: unless-stopped
+
+  dashboard:
+    build: .
+    command: ["dashboard"]
+    ports: ["7860:7860"]
+    environment: { OLYMPICS_ROOT: /app/workspace }
+    volumes: ["./workspace:/app/workspace"]
+    restart: unless-stopped
+
+  mlflow:            # experiment tracking UI over the workspace's mlruns folder
+    image: ghcr.io/mlflow/mlflow:latest
+    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri file:///mlruns
+    ports: ["5000:5000"]
+    volumes: ["./workspace/mlruns:/mlruns"]

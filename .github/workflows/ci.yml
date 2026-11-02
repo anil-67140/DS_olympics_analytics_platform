@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push: { branches: [main] }
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: { python-version: ["3.11", "3.12"] }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ matrix.python-version }}", cache: pip }
+      - run: pip install -r requirements-dev.txt
+      - name: Lint
+        run: ruff check src apps tests
+      - name: Unit + integration tests (synthetic data, no Kaggle needed)
+        run: python -m pytest --cov=olympics --cov-report=xml --cov-report=term-missing
+      - name: Smoke-run the whole pipeline on demo data
+        run: python -m olympics.cli run --demo --root ci_workspace --set ml.profile=fast --set ml.cv_top_k=1 --set 'ml.models=[logistic_regression,hist_gradient_boosting]'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-report-py${{ matrix.python-version }}
+          path: |
+            ci_workspace/reports/REPORT.html
+            ci_workspace/reports/metrics/final_model_metrics.json
+            coverage.xml
+
+  docker:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t olympics-platform:${{ github.sha }} .
+      - name: Container starts and /health answers (no model yet => "no_model")
+        run: |
+          docker run -d --name api -p 8000:8000 olympics-platform:${{ github.sha }}
+          for i in $(seq 1 30); do curl -sf localhost:8000/health && break || sleep 2; done
+          curl -sf localhost:8000/health | grep -E '"status":"(ok|no_model)"'

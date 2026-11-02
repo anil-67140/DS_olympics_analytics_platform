@@ -1,0 +1,83 @@
+# Single source of truth for every tunable in the project (also read by DVC as params).
+# Override at runtime:  python -m olympics.cli run --set ml.profile=fast --set data.sample_frac=0.2
+
+project:
+  name: olympics-analytics-platform
+  version: "1.0.0"
+
+data:
+  # Which Kaggle source to use. "heesoo37_120y" is the schema used by your original notebook
+  # (athlete_events.csv + noc_regions.csv, 1896-2016). "olympedia" is the larger, more recent
+  # Olympedia-based dataset (see docs/DATA_DICTIONARY.md). Run `python -m olympics.cli inspect-source`
+  # after download to confirm the column mapping before a long run.
+  source: heesoo37_120y
+  sources:
+    heesoo37_120y:
+      kaggle_slug: heesoo37/120-years-of-olympic-history-athletes-and-results
+    olympedia:
+      kaggle_slug: josephcheng123456/olympic-historical-dataset-from-olympediaorg
+  local_dir: null            # set to a folder to skip the Kaggle download (e.g. files already in Drive)
+  seasons: [Summer, Winter]
+  exclude_years: [1906]      # 1906 Intercalated Games are not recognised by the IOC
+  sample_frac: null          # e.g. 0.2 for quick experiments
+
+validation:
+  age_range: [10, 100]
+  height_range: [120, 240]   # cm
+  weight_range: [25, 250]    # kg
+  bmi_range: [10, 60]
+  max_birth_year_spread: 2   # same athlete ID with inconsistent implied birth year
+  fail_on:
+    missing_required_columns: true
+    invalid_medal_values_pct: 0.5
+    duplicate_pct: 10.0
+
+stats:
+  alpha: 0.05
+  bootstrap_n: 2000
+  min_group_size: 30
+  top_sports: 12
+  seed: 42
+
+forecast:
+  season: Summer
+  holdout_editions: 6        # rolling-origin backtest over the last N editions
+  top_k_countries: 25
+  interval: [0.05, 0.95]
+  seed: 42
+
+ml:
+  profile: full              # "fast" = smaller models/sample for smoke tests, "full" = Colab run
+  seed: 42
+  target: won_medal
+  split:
+    mode: group_stratified   # group_stratified | temporal
+    group_cols: [Games, NOC] # whole delegations stay together -> no teammate/delegation leakage
+    train: 0.70
+    val: 0.15
+    test: 0.15
+  compare_max_rows: 150000   # rows used when fitting each candidate (stratified subsample)
+  cv_top_k: 3                # grouped CV on the best k models to check stability
+  cv_folds: 5
+  primary_metric: pr_auc
+  models: null               # null = all available; or list of names
+  calibration_methods: [none, sigmoid, isotonic]
+  threshold:
+    strategy: fbeta          # fbeta | cost | precision_at_recall | youden
+    beta: 1.0
+    cost_fp: 1.0
+    cost_fn: 3.0
+    target_recall: 0.80
+  temporal_backtest_editions: 2
+  n_jobs: -1
+
+monitoring:
+  psi_warn: 0.10
+  psi_alert: 0.25
+  ks_alpha: 0.01
+  performance_drop_tolerance: 0.03
+  ignore_features: [Year]    # calendar year drifts by definition; its effect is captured by history/host features
+
+retrain:
+  min_feedback_rows: 200
+  min_gain: -0.005           # challenger may be at most this much worse than the champion (PR-AUC)
